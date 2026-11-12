@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════
    CINEMA PROJECTION — 3 minutes maximum, strict time budget
-   · real-time clock (4 s) → storm → 4 pages block by block: Overview, TDOA, Target (orbit), Solar
+   · lancée depuis l'écran d'accueil (guide.js) → orage → 4 pages bloc par bloc : Aperçu, TDOA, Cible (orbite), Solaire
    · French military voice (pre-recorded brief summaries of what is displayed) + AM-radio ambience (static MP3)
    · SCENARIO: forced transmission (30 s, reversed voices, abstract waveform) → black + accelerating sirens + tornado → resume
-     triggered at ~50 % of the time OR on the 3rd tap within 8 s; the show ends on time (3:00 from launch)
+     déclenchée juste après l'orbite (ou appui long sur le titre du bandeau) ; désactivable dans les réglages ; fin à l'heure (3:00)
    · no real-time generated sound: everything is played from MP3 files
    · after the run every page of the app stays available (exit() restores the full navigation)
 */
@@ -309,20 +309,24 @@
     vol: '<svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10H3zm11.5 2a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg>',
     mute: '<svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10H3zm13 .6L17.4 9 19 10.6 20.6 9 22 10.6 20.4 12.2 22 13.8 20.6 15.4 19 13.8 17.4 15.4 16 13.8 17.6 12.2z"/></svg>',
     close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>',
+    help: '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 16.2a1.3 1.3 0 110-2.6 1.3 1.3 0 010 2.6zm1.4-5.1c-.6.4-.8.7-.8 1.4v.4h-2v-.5c0-1.3.5-2 1.4-2.6.8-.5 1.2-.9 1.2-1.6 0-.8-.6-1.3-1.4-1.3-.9 0-1.5.6-1.6 1.5H8.2C8.3 8 9.8 6.5 12 6.5c2.1 0 3.6 1.3 3.6 3.1 0 1.4-.8 2.2-2.2 3.5z"/></svg>',
     film: '<svg viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1zm1 2v2h2V6H5zm0 4v2h2v-2H5zm0 4v2h2v-2H5zm12-8v2h2V6h-2zm0 4v2h2v-2h-2zm0 4v2h2v-2h-2zM9 6v12h6V6H9z"/></svg>',
   };
   doc.body.insertAdjacentHTML('beforeend',
     '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="cx-liq" x="-15%" y="-15%" width="130%" height="130%"><feTurbulence type="turbulence" baseFrequency="0.011 0.02" numOctaves="2" seed="4" result="t"/><feDisplacementMap id="cx-liq-map" in="SourceGraphic" in2="t" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>' +
     '<div id="cx-glow"></div><div id="cx-vig"></div>' +
-    '<div id="cx-bars"><div class="cx-bar top"><span class="lab">OPERATION LIGHTNING</span><span class="pg" id="cx-pg">3:00</span></div>' +
+    '<div id="cx-bars"><div class="cx-bar top"><span class="lab" id="cx-lab">OPÉRATION LIGHTNING</span><span class="pg" id="cx-pg" aria-label="Temps restant">3:00</span></div>' +
     '<div class="cx-bar bot"><div id="cx-prog"><i></i></div><div id="cx-hud">' +
-      '<button id="cx-pause" aria-label="Pause">' + ICON.pause + '</button><button id="cx-next" aria-label="Next block">' + ICON.next + '</button>' +
-      '<button id="cx-page" aria-label="Next page">' + ICON.page + '</button>' +
-      '<button id="cx-snd" aria-label="Sound">' + ICON.vol + '</button><button id="cx-exit" aria-label="Exit presentation">' + ICON.close + '</button></div></div></div>' +
+      '<button id="cx-pause" aria-label="Pause">' + ICON.pause + '<span>Pause</span></button>' +
+      '<button id="cx-next" aria-label="Bloc suivant">' + ICON.next + '<span>Suivant</span></button>' +
+      '<button id="cx-page" aria-label="Page suivante">' + ICON.page + '<span>Page +</span></button>' +
+      '<button id="cx-snd" aria-label="Couper le son">' + ICON.vol + '<span>Son</span></button>' +
+      '<button id="cx-help" aria-label="Aide">' + ICON.help + '<span>Aide</span></button>' +
+      '<button id="cx-exit" aria-label="Quitter la visite">' + ICON.close + '<span>Quitter</span></button></div></div></div>' +
     '<div id="cx-card"><div class="cx-kal"></div><div class="cx-rings"></div><div class="cx-rings b"></div><div class="cx-num"></div><div class="cx-name"></div><div class="cx-sub"></div></div>' +
-    '<div id="cx-hack"><canvas id="cx-hack-cv" width="150" height="270"></canvas><div class="hk-top">⚠ UNIDENTIFIED SIGNAL</div><div class="hk-mid" id="hk-mid">FORCED TRANSMISSION</div><div class="hk-bot" id="hk-bot"></div></div>' +
+    '<div id="cx-hack"><canvas id="cx-hack-cv" width="150" height="270"></canvas><div class="hk-top">⚠ SIGNAL NON IDENTIFIÉ</div><div class="hk-mid" id="hk-mid">TRANSMISSION FORCÉE</div><div class="hk-bot" id="hk-bot"></div></div>' +
     '<div id="cx-black"></div>' +
-    '<button id="cx-fab" aria-label="Replay presentation">' + ICON.film + '</button>');
+    '<button id="cx-fab" aria-label="Lancer la visite guidée">' + ICON.film + '<span>Visite guidée</span></button>');
   const el$ = id => doc.getElementById(id), card = el$('cx-card'), glow = el$('cx-glow');
 
   const GL = '█▓▒░<>/\\|01#$%&*+=?';
@@ -340,22 +344,30 @@
     if (hijack) return;
     if (p) pauseAt = now(); else { const d = now() - pauseAt; deadline += d; scenAt += d; }
     paused = p; finishers.forEach(a => { try { p ? a.pause && a.pause() : a.play && a.play(); } catch (e) {} });
-    Sound.pauseAll(p); el$('cx-pause').innerHTML = p ? ICON.play : ICON.pause;
+    Sound.pauseAll(p); setBtn('cx-pause', p ? ICON.play : ICON.pause, p ? 'Reprendre' : 'Pause');
   }
-  let taps = [];
+  function setBtn(id, icon, label) { const b = el$(id); b.innerHTML = icon + '<span>' + label + '</span>'; b.setAttribute('aria-label', label); }
+  const G = () => window.__guide || null;
   function tapSkip() { skipReq = 1; finishAll(); }
   el$('cx-pause').addEventListener('click', e => { e.stopPropagation(); setPaused(!paused); });
   el$('cx-next').addEventListener('click', e => { e.stopPropagation(); if (!hijack) tapSkip(); });
   el$('cx-page').addEventListener('click', e => { e.stopPropagation(); if (hijack) return; pageSkip = true; tapSkip(); Sound.stopSay(); });
-  el$('cx-snd').addEventListener('click', e => { e.stopPropagation(); const m = !Sound.muted; Sound.mute(m); el$('cx-snd').innerHTML = m ? ICON.mute : ICON.vol; });
+  el$('cx-snd').addEventListener('click', e => { e.stopPropagation(); const m = !Sound.muted; Sound.mute(m); ls.set('lx.sound', m ? '0' : '1'); if (!m && !Sound.on) Score.start();
+    setBtn('cx-snd', m ? ICON.mute : ICON.vol, m ? 'Muet' : 'Son'); if (G()) G().toast(m ? 'Son coupé' : 'Son activé', 1400); });
+  el$('cx-help').addEventListener('click', e => { e.stopPropagation(); if (hijack || !G()) return; const was = paused; if (!was) setPaused(true); G().openHelp(() => { if (!was && active) setPaused(false); }); });
   el$('cx-exit').addEventListener('click', e => { e.stopPropagation(); exit(); });
-  // toucher l'écran = passer au bloc suivant ; TROIS touchers en 8 s = « piratage » (scénario forcé)
+  // toucher l'écran = passer au bloc suivant (un toucher pendant la pause = reprendre)
   doc.addEventListener('pointerdown', e => {
-    if (!active || e.target.closest('#cx-bars') || hijack || finaleStarted) return;
-    const t = now(); taps = taps.filter(x => t - x < 8000); taps.push(t);
-    if (taps.length >= 3 && !hackDone) { taps = []; hackReq = true; finishAll(); return; }
+    if (!active || e.target.closest('#cx-bars, #gd-aide, #gd-toast') || hijack || finaleStarted) return;
+    if (paused) { setPaused(false); return; }
     tapSkip();
   }, { passive: true });
+  // easter egg : appui long (1,2 s) sur le titre du bandeau = déclenche la « transmission pirate » (si activée)
+  (function () {
+    let lp = 0; const lab = el$('cx-lab');
+    lab.addEventListener('pointerdown', () => { clearTimeout(lp); lp = setTimeout(() => { if (active && !hackDone && !hijack && !paused) { hackReq = true; finishAll(); } }, 1200); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => lab.addEventListener(t, () => clearTimeout(lp)));
+  })();
   el$('cx-fab').addEventListener('click', () => { window.__lxFromLaunch = false; start(); });
 
   /* ── scénario : transmission forcée → noir + sirènes/tornade → reprise ── */
@@ -365,7 +377,7 @@
     cancelAnimationFrame(hackRaf);
     if (!onOff) { hk.classList.remove('on'); return; }
     hk.classList.add('on'); const t0 = now(), nf = noflash(), id = ImageData ? c.createImageData(W, H) : null; let last = 0;
-    const MSG = ['FORCED TRANSMISSION', 'UNKNOWN SOURCE', 'CHANNEL COMPROMISED', 'EXTERNAL BROADCAST'];
+    const MSG = ['TRANSMISSION FORCÉE', 'SOURCE INCONNUE', 'CANAL COMPROMIS', 'ÉMISSION EXTÉRIEURE'];
     const step = n => {
       if (!hk.classList.contains('on')) return; hackRaf = requestAnimationFrame(step);
       if (n - last < 42) return; last = n; const t = (now() - t0) / 1000, k = clamp(t / 30, 0, 1);
@@ -378,7 +390,7 @@
       c.stroke(); c.strokeStyle = 'rgba(255,60,60,.55)'; c.beginPath();
       for (let x = 0; x < W; x++) { const y = H * .5 + Math.sin(x * .05 - t * 5) * 18 * Math.sin(t * .9) + (Math.random() - .5) * 6; x ? c.lineTo(x, y) : c.moveTo(x, y); } c.stroke();
       mid.textContent = MSG[Math.floor(t / 3) % MSG.length]; const f = (1000 + Math.random() * 999).toFixed(1);
-      bot.textContent = 'FREQ ' + f + ' MHz · SOURCE: UNKNOWN · BEARING: — · T-' + String(Math.max(0, Math.ceil(30 - t))).padStart(2, '0');
+      bot.textContent = 'FRÉQ ' + f.replace('.', ',') + ' MHz · SOURCE : INCONNUE · CAP : — · T-' + String(Math.max(0, Math.ceil(30 - t))).padStart(2, '0');
     };
     hackRaf = requestAnimationFrame(step);
   }
@@ -399,7 +411,7 @@
     await sleep(BLACK_MS - 1300); clearInterval(bv); blk.classList.remove('alarm');
     // 4. retour à la projection classique
     blk.style.transition = 'opacity ' + (FADE_MS / 1000) + 's ease'; blk.style.opacity = 0; Sound.bgRestore(FADE_MS);
-    await sleep(FADE_MS); hijack = false; skipReq = 0; taps = [];
+    await sleep(FADE_MS); hijack = false; skipReq = 0;
   }
 
 
@@ -433,7 +445,8 @@
 
   async function chapterCard(p, i, n) {
     card.style.display = 'flex';
-    card.querySelector('.cx-num').textContent = 'CHAPTER ' + pad2(i + 1) + ' / ' + pad2(n);
+    card.querySelector('.cx-num').textContent = 'CHAPITRE ' + pad2(i + 1) + ' / ' + pad2(n);
+    el$('cx-lab').textContent = (i + 1) + '/' + n + ' · ' + p.name.toUpperCase();
     const nm = card.querySelector('.cx-name'), sb = card.querySelector('.cx-sub'); nm.textContent = ''; sb.textContent = p.sub || '';
     sb.style.opacity = 0; card.querySelector('.cx-num').style.opacity = 0;
     anim(card, [{ clipPath: 'circle(0% at 50% 50%)', filter: 'blur(14px)' }, { clipPath: 'circle(75% at 50% 50%)', filter: 'blur(0)' }], { duration: 550, easing: 'cubic-bezier(.5,0,.2,1)' });
@@ -493,9 +506,9 @@
   async function finale() {
     finaleStarted = true; card.style.display = 'flex';
     const nm = card.querySelector('.cx-name'), sb = card.querySelector('.cx-sub'), nu = card.querySelector('.cx-num');
-    nu.textContent = 'END OF TRANSMISSION'; nu.style.opacity = 1; nm.textContent = ''; sb.textContent = 'PROJECT S3CR3T  ·  #by VTLO@xda'; sb.style.opacity = 1;
+    nu.textContent = 'FIN DE TRANSMISSION'; el$('cx-lab').textContent = 'OPÉRATION LIGHTNING'; nu.style.opacity = 1; nm.textContent = ''; sb.textContent = 'PROJECT S3CR3T  ·  #by VTLO@xda'; sb.style.opacity = 1;
     anim(card, [{ opacity: 0, filter: 'blur(20px)', transform: 'scale(.8) rotate(-12deg)' }, { opacity: 1, filter: 'blur(0)', transform: 'none' }], { duration: 900, easing: EASE });
-    Sound.say('outro', RATE); await scramble(nm, 'OPERATION LIGHTNING', 900);
+    Sound.say('outro', RATE); await scramble(nm, 'OPÉRATION LIGHTNING', 900);
     const left = deadline - now(); if (left > 0) await wait(left);
   }
   function levelLoop() {
@@ -506,7 +519,7 @@
   }
   function clockLoop() {
     const left = Math.max(0, deadline - now()), m = Math.floor(left / 60000), s = Math.floor(left / 1000) % 60;
-    el$('cx-pg').textContent = m + ':' + String(s).padStart(2, '0');
+    el$('cx-pg').textContent = 'reste ' + m + ':' + String(s).padStart(2, '0');
     el$('cx-prog').firstElementChild.style.width = clamp((now() - T0) / Math.max(1, deadline - T0) * 100, 0, 100) + '%';
   }
 
@@ -535,17 +548,20 @@
   async function start() {
     if (active) return;
     U = window.__fx ? window.__fx.U : null;
-    active = true; window.__cinemaActive = true; tok = { cancel: false }; paused = false; skipReq = 0; pageSkip = false; hijack = false; hackDone = false; hackReq = false; finaleStarted = false; taps = [];
-    el$('cx-pause').innerHTML = ICON.pause;
+    active = true; window.__cinemaActive = true; tok = { cancel: false }; paused = false; skipReq = 0; pageSkip = false; hijack = false; hackReq = false; finaleStarted = false;
+    hackDone = ls.get('lx.choc', '1') !== '1';                   // séquence « transmission pirate » désactivée dans les réglages
+    setBtn('cx-pause', ICON.pause, 'Pause'); el$('cx-lab').textContent = 'OPÉRATION LIGHTNING';
     root.classList.add('cinema'); pages = pageList(); assignNar(); $$('[data-nar-st]').forEach(e => e.removeAttribute('data-nar-st'));
-    T0 = now(); deadline = window.__lxFromLaunch ? Math.max(T0 + 120000, TOTAL_MS) : T0 + 170000; scenAt = T0 + (deadline - T0) * .72;
-    const snd = ls.get('lx.sound', '1') === '1'; Sound.mute(!snd); el$('cx-snd').innerHTML = snd ? ICON.vol : ICON.mute;
+    T0 = now(); const L0 = window.__lxT0 || 0;                  // 3:00 à partir du toucher « visite guidée » (intro d'orage comprise)
+    deadline = window.__lxFromLaunch && L0 ? Math.max(T0 + 120000, L0 + TOTAL_MS) : T0 + 170000; scenAt = T0 + (deadline - T0) * .72;
+    const snd = ls.get('lx.sound', '1') === '1'; Sound.mute(!snd); setBtn('cx-snd', snd ? ICON.vol : ICON.mute, snd ? 'Son' : 'Muet');
+    if (G()) G().tip('Touchez l\'écran pour passer au bloc suivant. Les boutons en bas : pause, page suivante, son, aide, quitter.', 6500);
     if (snd) Score.start();
     levelLoop(); clockInt = setInterval(clockLoop, 250); clockLoop();
     // carte d'ouverture + planification (calcul des durées de chaque bloc) pendant l'annonce d'intro
     card.style.display = 'flex'; card.querySelector('.cx-num').textContent = 'TRANSMISSION'; card.querySelector('.cx-num').style.opacity = 1;
-    card.querySelector('.cx-sub').textContent = 'SYNCHRONIZING · SECURE CHANNEL'; card.querySelector('.cx-sub').style.opacity = 1;
-    scramble(card.querySelector('.cx-name'), 'OPERATION LIGHTNING', 900);
+    card.querySelector('.cx-sub').textContent = 'SYNCHRONISATION · CANAL SÉCURISÉ'; card.querySelector('.cx-sub').style.opacity = 1;
+    scramble(card.querySelector('.cx-name'), 'OPÉRATION LIGHTNING', 900);
     Sound.say('intro', RATE); await planAll();
     await wait(Math.max(300, INTRO_MS - 400)); await chapterOutQuick(); skipReq = 0;
     run();
@@ -564,32 +580,13 @@
     root.classList.remove('cinema'); window.__quietShow = false;
     try { window.showSection('overview'); } catch (e) {}
     scrollTo(0, 0); if (U) U.boost = 1;
+    if (G()) G().afterVisit(!!natural);
   }
 
 
-  /* ═════════════════════ 7. ÉCRAN D'OUVERTURE : horloge temps réel (4 s) ═════════════════════ */
-  const clk = el$('clockscreen');
-  if (clk) {
-    const tEl = el$('clk-time'), cEl = el$('clk-cs'), dEl = el$('clk-date'), uEl = el$('clk-utc'), zEl = el$('clk-zone'), pEl = el$('clk-bar').firstElementChild, nEl = el$('clk-count');
-    const nf = el$('clk-noflash'); nf.checked = ls.get('lx.noflash', '0') === '1'; root.classList.toggle('noflash', nf.checked);
-    nf.addEventListener('change', () => { ls.set('lx.noflash', nf.checked ? '1' : '0'); root.classList.toggle('noflash', nf.checked); });
-    const p2 = n => String(n).padStart(2, '0'), t0 = now(), CLOCK_MS = 4000; let done = false;
-    const off = -new Date().getTimezoneOffset(), zs = 'UTC' + (off >= 0 ? '+' : '−') + p2(Math.floor(Math.abs(off) / 60)) + ':' + p2(Math.abs(off) % 60);
-    zEl.textContent = zs + ' · LOCAL TIME';
-    const tick = () => {
-      const d = new Date(), k = clamp((now() - t0) / CLOCK_MS, 0, 1);
-      tEl.textContent = p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); cEl.textContent = '.' + p2(Math.floor(d.getMilliseconds() / 10));
-      dEl.textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
-      uEl.textContent = 'UTC ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds()) + 'Z';
-      pEl.style.width = (k * 100) + '%'; nEl.textContent = 'STARTING IN ' + Math.max(1, Math.ceil(4 - k * 4)) + ' s';
-      if (k < 1) requestAnimationFrame(tick); else if (!done) go();
-    };
-    const go = () => {
-      done = true; clk.classList.add('out'); setTimeout(() => { clk.style.display = 'none'; }, 700);
-      window.__lxCinema = true; window.__lxFromLaunch = true; buzz('18'); if (window.__launchSeq) window.__launchSeq();
-    };
-    requestAnimationFrame(tick);
-  } else { window.__lxCinema = true; window.__lxFromLaunch = true; if (window.__launchSeq) window.__launchSeq(); }
+  /* ═════════════════════ 7. LANCEMENT ═════════════════════
+     L'écran d'accueil (guide.js) choisit le mode : visite guidée (window.__lxCinema = true) ou exploration libre,
+     puis appelle window.__launchSeq() ; à la fin de l'intro, fx.js lance start() si la visite guidée est demandée. */
 
   window.__cinemaTest = collectBlocks;
   window.__cinema = { FX, start, exit, hack, get plans() { return plans; }, get nomLeft() { return nomLeft; }, kLive: () => kLive(), get active() { return active; }, get hijack() { return hijack; }, get deadline() { return deadline; }, Score, Sound };

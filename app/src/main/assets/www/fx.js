@@ -328,7 +328,7 @@ void main(){
     cancelAnimationFrame(el._cu);
     const step = now => {
       const k = clamp((now - t0) / dur, 0, 1), e = 1 - Math.pow(1 - k, 4);
-      el.textContent = m[1] + (target * e).toFixed(dec) + m[3];
+      el.textContent = m[1] + (target * e).toFixed(dec).replace('.', ',') + m[3];
       if (k < 1) el._cu = requestAnimationFrame(step); else el.textContent = orig;
     };
     el._cu = requestAnimationFrame(step);
@@ -406,7 +406,7 @@ void main(){
       ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(0,229,255,.45)'; ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, plotH); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,224,51,.4)'; ctx.beginPath(); ctx.moveTo(bx, 0); ctx.lineTo(bx, plotH); ctx.stroke(); ctx.setLineDash([]);
       ctx.font = '8.5px "Space Mono", monospace';
-      ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(0,229,255,.8)'; ctx.fillText('GPS L1 1575.42', gx - 4, 11);
+      ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(0,229,255,.8)'; ctx.fillText('GPS L1 1575,42', gx - 4, 11);
       ctx.textAlign = 'left';  ctx.fillStyle = 'rgba(255,224,51,.8)'; ctx.fillText('BeiDou B1I', bx + 4, 11);
       // simulated live spectrum: bursts every ~150 s compressed into a visible rhythm
       const burst1 = .55 + .45 * Math.pow(Math.max(0, Math.sin(T * 1.1)), 2);
@@ -441,8 +441,8 @@ void main(){
         ctx.textAlign = 'center'; ctx.fillStyle = col; ctx.font = 'bold 9.5px "Space Mono", monospace'; ctx.fillText(txt, x, 28);
         if (W > 420) { ctx.font = '8.5px "Space Mono", monospace'; ctx.globalAlpha = .75; ctx.fillText(sub, x, 40); ctx.globalAlpha = 1; }
       };
-      tag(1577.5, 'JAMMER 1 · 1577.5', '~5 MHz BW', '#ff5d55');
-      tag(1558.5, 'JAMMER 2 · 1558.5', '~4 MHz BW', '#ffe033');
+      tag(1577.5, 'BROUILLEUR 1 · 1577,5', '~5 MHz de bande', '#ff5d55');
+      tag(1558.5, 'BROUILLEUR 2 · 1558,5', '~4 MHz de bande', '#ffe033');
       // sweeping scan cursor
       const sx = ((T * .12) % 1) * W;
       const sg = ctx.createLinearGradient(sx - 40, 0, sx, 0); sg.addColorStop(0, 'rgba(0,229,255,0)'); sg.addColorStop(1, 'rgba(0,229,255,.22)');
@@ -508,16 +508,16 @@ void main(){
       const term = ctx.createLinearGradient(ex - eR, 0, ex + eR, 0); term.addColorStop(0, 'rgba(0,0,0,0)'); term.addColorStop(1, 'rgba(0,0,0,.55)');
       ctx.fillStyle = term; ctx.fillRect(ex - eR, ey - eR, eR * 2, eR * 2); ctx.restore();
       ctx.font = 'bold ' + Math.round(11 * KS) + 'px "Space Mono", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(0,229,255,.95)';
-      ctx.fillText('EARTH', ex, ey + eR + 16 * KS);
+      ctx.fillText('TERRE', ex, ey + eR + 16 * KS);
 
       // apogee / perigee markers
       const ag = pos(Math.PI), pg = pos(0);
       ctx.beginPath(); ctx.arc(ag.x, ag.y, 6.5, 0, 6.2832); ctx.fillStyle = 'rgba(255,59,59,.3)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,59,59,.85)'; ctx.lineWidth = 1.4; ctx.stroke();
       ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,90,90,.95)'; ctx.font = 'bold ' + Math.round(11 * KS) + 'px "Space Mono", monospace';
-      ctx.fillText('APOGEE ~39,000 km', clamp(ag.x + 6, 110, W - 4), ag.y - 14);
+      ctx.fillText('APOGÉE ~39 000 km', clamp(ag.x + 6, 110, W - 4), ag.y - 14);
       ctx.beginPath(); ctx.arc(pg.x, pg.y, 2.8, 0, 6.2832); ctx.fillStyle = 'rgba(0,229,255,.6)'; ctx.fill();
       ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(0,229,255,.7)'; ctx.font = 'bold ' + Math.round(10 * KS) + 'px "Space Mono", monospace';
-      ctx.fillText('PERIGEE ~500 km', 6, ey + eR + 34 * KS);
+      ctx.fillText('PÉRIGÉE ~500 km', 6, ey + eR + 34 * KS);
 
       // satellites on a true Kepler clock (slow at apogee, fast at perigee)
       const n = T * .30;
