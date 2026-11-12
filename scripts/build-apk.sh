@@ -10,7 +10,7 @@ cd "$M"
 sed 's#<manifest #<manifest package="com.vtlo.lightning" #' AndroidManifest.xml > "$B/AndroidManifest.xml"
 $BT/aapt2 compile --dir res -o "$B/compiled.zip"
 $BT/aapt2 link -o "$B/base.apk" -I "$AJ" --manifest "$B/AndroidManifest.xml" --min-sdk-version 24 --target-sdk-version 34 \
-  --version-code 1 --version-name 1.0.0 -A assets "$B/compiled.zip"
+  --version-code 1 --version-name 1.0.0 -0 mp3 -A assets "$B/compiled.zip"
 javac -parameters -source 8 -target 8 -Xlint:-options -bootclasspath "$AJ" -d "$B/classes" java/com/vtlo/lightning/MainActivity.java
 $BT/d8 --lib "$AJ" --min-api 24 --output "$B/dex" $(find "$B/classes" -name '*.class')
 (cd "$B/dex" && zip -q -j "$B/base.apk" classes.dex)

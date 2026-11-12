@@ -27,6 +27,7 @@ android {
             signingConfig System.getenv('KEYSTORE_FILE') ? signingConfigs.release : signingConfigs.debug
         }
     }
+    androidResources { noCompress 'mp3' }          // MediaPlayer lit les MP3 via AssetFileDescriptor : il doit être non compressé
     lint { checkReleaseBuilds false; abortOnError false }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

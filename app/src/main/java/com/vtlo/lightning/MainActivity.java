@@ -14,11 +14,12 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.content.SharedPreferences;
-import android.speech.tts.TextToSpeech;
-import android.speech.tts.UtteranceProgressListener;
-import android.speech.tts.Voice;
-import org.json.JSONArray;
+import android.content.res.AssetFileDescriptor;
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
+import android.media.PlaybackParams;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.HapticFeedbackConstants;
 import android.view.Surface;
 import android.view.View;
@@ -34,12 +35,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 /**
  * Operation Lightning — full-screen, offline WebView shell.
@@ -56,13 +52,12 @@ public class MainActivity extends Activity implements SensorEventListener {
     private SensorManager sensors;
     private Sensor accel;
 
-    // ── synthèse vocale ──
-    private TextToSpeech tts;
-    private volatile String ttsState = "init";          // init | ok | nofr | error
-    private final List<Voice> frVoices = new ArrayList<Voice>();
-    private int voiceIdx = 0;
-    private float ttsRate = 1f;
-    private SharedPreferences prefs;
+    // ── audio : piste d'ambiance (boucle) + voix préenregistrées ──
+    private MediaPlayer bgPlayer, narPlayer, fxPlayer;
+    private float bgVol = 0.6f, bgTarget = 0.6f;
+    private boolean bgReady = false, audioPausedByApp = false;
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private Runnable rampTask;
 
     private int insT, insR, insB, insL;
     private boolean pageReady = false;
@@ -98,8 +93,6 @@ public class MainActivity extends Activity implements SensorEventListener {
                             | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         }
 
-        prefs = getSharedPreferences("vtlo", MODE_PRIVATE);
-        ttsRate = prefs.getFloat("rate", 1f);
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         sensors = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensors != null) accel = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -109,7 +102,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         setContentView(root);
 
         buildWebView();
-        initTts();
 
         root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
             @Override
@@ -190,76 +182,48 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
 
-    // ───────────── synthèse vocale (fr-FR) ─────────────
-    private void initTts() {
-        tts = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
-            @Override public void onInit(int status) { onTtsInit(status); }
-        });
-    }
-
-    private int voiceScore(Voice v) {
-        String n = v.getName().toLowerCase(Locale.ROOT);
-        int sc = 0;
-        if ("FR".equalsIgnoreCase(v.getLocale().getCountry())) sc += 20;
-        if (n.contains("female") || n.contains("femme")) sc += 60;
-        else if (n.contains("male")) sc -= 60;
-        // Voix Google fr-FR : fra / frc / vlf = féminines, frb / frd = masculines
-        if (n.contains("-x-fra") || n.contains("-x-frc") || n.contains("-x-vlf")) sc += 40;
-        if (n.contains("-x-frb") || n.contains("-x-frd")) sc -= 40;
-        if (!v.isNetworkConnectionRequired()) sc += 10;
-        sc += v.getQuality() / 100;
-        return sc;
-    }
-
-    private void onTtsInit(int status) {
-        if (status != TextToSpeech.SUCCESS || tts == null) { ttsState = "error"; return; }
-        int r = tts.setLanguage(Locale.FRANCE);
-        if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) { ttsState = "nofr"; return; }
-        tts.setPitch(1.05f);
-        tts.setSpeechRate(ttsRate);
-        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-            @Override public void onStart(String id) { callJs("window.__tts&&window.__tts.onStart(" + safeId(id) + ")"); }
-            @Override public void onDone(String id) { callJs("window.__tts&&window.__tts.onDone(" + safeId(id) + ")"); }
-            @Override public void onError(String id) { callJs("window.__tts&&window.__tts.onError(" + safeId(id) + ")"); }
-        });
-        frVoices.clear();
-        try {
-            Set<Voice> all = tts.getVoices();
-            if (all != null) {
-                for (Voice v : all) {
-                    String lang = v.getLocale().getLanguage();
-                    if (!"fr".equals(lang)) continue;
-                    if (v.getFeatures() != null && v.getFeatures().contains("notInstalled")) continue;
-                    frVoices.add(v);
-                }
-            }
-        } catch (Exception ignored) { }
-        Collections.sort(frVoices, new Comparator<Voice>() {
-            @Override public int compare(Voice a, Voice b) { return voiceScore(b) - voiceScore(a); }
-        });
-        String saved = prefs.getString("voice", "");
-        voiceIdx = 0;
-        for (int i = 0; i < frVoices.size(); i++) if (frVoices.get(i).getName().equals(saved)) voiceIdx = i;
-        applyVoice();
-        ttsState = "ok";
-    }
-
-    private void applyVoice() {
-        if (tts == null || frVoices.isEmpty()) return;
-        try {
-            Voice v = frVoices.get(voiceIdx % frVoices.size());
-            tts.setVoice(v);
-            prefs.edit().putString("voice", v.getName()).apply();
-        } catch (Exception ignored) { }
-    }
-
-    private static String safeId(String id) {
-        try { return String.valueOf(Integer.parseInt(id)); } catch (Exception e) { return "-1"; }
-    }
 
     private void callJs(final String js) {
         if (web == null) return;
         web.post(new Runnable() { @Override public void run() { if (web != null) web.evaluateJavascript(js, null); } });
+    }
+
+    // ───────────── audio natif ─────────────
+    private AudioAttributes mediaAttrs() {
+        return new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build();
+    }
+    private MediaPlayer openAsset(String path) throws Exception {
+        AssetFileDescriptor fd = getAssets().openFd(path);       // fichiers .mp3 stockés non compressés dans l'APK
+        MediaPlayer mp = new MediaPlayer();
+        mp.setAudioAttributes(mediaAttrs());
+        mp.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+        fd.close();
+        return mp;
+    }
+    private void releaseBg() {
+        bgReady = false;
+        if (rampTask != null) ui.removeCallbacks(rampTask);
+        if (bgPlayer != null) { try { bgPlayer.release(); } catch (Exception ignored) { } bgPlayer = null; }
+    }
+    private void releaseFx() {
+        if (fxPlayer != null) { try { fxPlayer.release(); } catch (Exception ignored) { } fxPlayer = null; }
+    }
+    private void releaseNar() {
+        if (narPlayer != null) { try { narPlayer.release(); } catch (Exception ignored) { } narPlayer = null; }
+    }
+    private void rampBg(final float to, final int ms) {
+        if (rampTask != null) ui.removeCallbacks(rampTask);
+        final float from = bgVol; final long t0 = System.currentTimeMillis(); final int d = Math.max(1, ms);
+        bgTarget = to;
+        rampTask = new Runnable() {
+            @Override public void run() {
+                float k = Math.min(1f, (System.currentTimeMillis() - t0) / (float) d);
+                bgVol = from + (to - from) * k;
+                if (bgPlayer != null) { try { bgPlayer.setVolume(bgVol, bgVol); } catch (Exception ignored) { } }
+                if (k < 1f) ui.postDelayed(this, 40);
+            }
+        };
+        ui.post(rampTask);
     }
 
     // ───────────── insets ─────────────
@@ -305,50 +269,82 @@ public class MainActivity extends Activity implements SensorEventListener {
         }
 
 
-        @JavascriptInterface public String ttsStatus() { return ttsState; }
 
-        @JavascriptInterface public float ttsGetRate() { return ttsRate; }
+        // ── piste d'ambiance ──
+        @JavascriptInterface public void bgStart(final String path, final float vol) {
+            ui.post(new Runnable() { @Override public void run() {
+                releaseBg();
+                try {
+                    bgPlayer = openAsset(path); bgPlayer.setLooping(true); bgVol = vol; bgPlayer.setVolume(vol, vol);
+                    bgPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                        @Override public void onPrepared(MediaPlayer mp) { bgReady = true; try { mp.start(); } catch (Exception ignored) { } }
+                    });
+                    bgPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+                        @Override public boolean onError(MediaPlayer mp, int what, int extra) { releaseBg(); callJs("window.__snd&&window.__snd.onFail('bg')"); return true; }
+                    });
+                    bgPlayer.prepareAsync();
+                } catch (Exception e) { releaseBg(); callJs("window.__snd&&window.__snd.onFail('bg')"); }
+            } });
+        }
+        @JavascriptInterface public void bgVolume(final float v, final int ms) { ui.post(new Runnable() { @Override public void run() { rampBg(v, ms); } }); }
+        @JavascriptInterface public void bgStop(final int fadeMs) {
+            ui.post(new Runnable() { @Override public void run() {
+                rampBg(0f, fadeMs);
+                ui.postDelayed(new Runnable() { @Override public void run() { releaseBg(); } }, fadeMs + 120);
+            } });
+        }
+        @JavascriptInterface public void bgPause() { ui.post(new Runnable() { @Override public void run() { try { if (bgPlayer != null && bgReady && bgPlayer.isPlaying()) bgPlayer.pause(); } catch (Exception ignored) { } } }); }
+        @JavascriptInterface public void bgResume() { ui.post(new Runnable() { @Override public void run() { try { if (bgPlayer != null && bgReady) bgPlayer.start(); } catch (Exception ignored) { } } }); }
+        @JavascriptInterface public int bgPos() { try { return (bgPlayer != null && bgReady) ? bgPlayer.getCurrentPosition() : -1; } catch (Exception e) { return -1; } }
 
-        @JavascriptInterface public void ttsSpeak(String json, float rate) {
-            if (tts == null || !"ok".equals(ttsState)) return;
-            try {
-                ttsRate = Math.max(0.5f, Math.min(2f, rate));
-                prefs.edit().putFloat("rate", ttsRate).apply();
-                tts.setSpeechRate(ttsRate);
-                tts.setPitch(1.05f);
-                JSONArray arr = new JSONArray(json);
-                for (int i = 0; i < arr.length(); i++) {
-                    String t = arr.getString(i);
-                    if (t.length() > 3900) t = t.substring(0, 3900);
-                    tts.speak(t, i == 0 ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD, null, String.valueOf(i));
-                }
-            } catch (Exception e) {
-                callJs("window.__tts&&window.__tts.onError(-1)");
-            }
+        // ── voix préenregistrées ──
+        @JavascriptInterface public void say(final String path, final float rate, final int token) {
+            ui.post(new Runnable() { @Override public void run() {
+                releaseNar();
+                try {
+                    final MediaPlayer mp = openAsset(path); narPlayer = mp;
+                    mp.setVolume(1f, 1f);
+                    mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                        @Override public void onCompletion(MediaPlayer m) { if (narPlayer == m) { releaseNar(); } callJs("window.__snd&&window.__snd.onEnd(" + token + ")"); }
+                    });
+                    mp.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+                        @Override public boolean onError(MediaPlayer m, int what, int extra) { if (narPlayer == m) releaseNar(); callJs("window.__snd&&window.__snd.onEnd(" + token + ")"); return true; }
+                    });
+                    mp.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                        @Override public void onPrepared(MediaPlayer m) {
+                            try {
+                                m.start();
+                                if (Build.VERSION.SDK_INT >= 23 && Math.abs(rate - 1f) > 0.01f) m.setPlaybackParams(new PlaybackParams().setSpeed(rate));
+                            } catch (Exception ignored) { }
+                        }
+                    });
+                    mp.prepareAsync();
+                } catch (Exception e) { callJs("window.__snd&&window.__snd.onEnd(" + token + ")"); }
+            } });
         }
 
-        @JavascriptInterface public void ttsStop() { if (tts != null) { try { tts.stop(); } catch (Exception ignored) { } } }
-
-        @JavascriptInterface public String ttsNextVoice() {
-            if (frVoices.isEmpty()) return "1/1";
-            voiceIdx = (voiceIdx + 1) % frVoices.size();
-            applyVoice();
-            return (voiceIdx + 1) + "/" + frVoices.size();
+        // ── effets forts du scénario (transmission forcée, blackout) : volume maximal, par-dessus tout ──
+        @JavascriptInterface public void fxPlay(final String path, final float vol, final int token) {
+            ui.post(new Runnable() { @Override public void run() {
+                releaseFx();
+                try {
+                    final MediaPlayer mp = openAsset(path); fxPlayer = mp; mp.setVolume(vol, vol);
+                    mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                        @Override public void onCompletion(MediaPlayer m) { if (fxPlayer == m) releaseFx(); callJs("window.__snd&&window.__snd.onFxEnd(" + token + ")"); }
+                    });
+                    mp.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+                        @Override public boolean onError(MediaPlayer m, int what, int extra) { if (fxPlayer == m) releaseFx(); callJs("window.__snd&&window.__snd.onFxEnd(" + token + ")"); return true; }
+                    });
+                    mp.setOnPreparedListener(new MediaPlayer.OnPreparedListener() { @Override public void onPrepared(MediaPlayer m) { try { m.start(); } catch (Exception ignored) { } } });
+                    mp.prepareAsync();
+                } catch (Exception e) { callJs("window.__snd&&window.__snd.onFxEnd(" + token + ")"); }
+            } });
         }
+        @JavascriptInterface public void fxStop() { ui.post(new Runnable() { @Override public void run() { releaseFx(); } }); }
 
-        @JavascriptInterface public String ttsVoiceInfo() {
-            return frVoices.isEmpty() ? "" : (voiceIdx + 1) + "/" + frVoices.size();
-        }
-
-        @JavascriptInterface public void ttsInstall() {
-            try {
-                Intent i = new Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(i);
-            } catch (Exception e) {
-                try { startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception ignored) { }
-            }
-        }
+        @JavascriptInterface public void sayStop() { ui.post(new Runnable() { @Override public void run() { releaseNar(); } }); }
+        @JavascriptInterface public void sayPause() { ui.post(new Runnable() { @Override public void run() { try { if (narPlayer != null && narPlayer.isPlaying()) narPlayer.pause(); } catch (Exception ignored) { } } }); }
+        @JavascriptInterface public void sayResume() { ui.post(new Runnable() { @Override public void run() { try { if (narPlayer != null) narPlayer.start(); } catch (Exception ignored) { } } }); }
 
         @JavascriptInterface
         public void tick() {
@@ -393,12 +389,14 @@ public class MainActivity extends Activity implements SensorEventListener {
     @Override
     protected void onResume() {
         super.onResume();
+        try { if (audioPausedByApp) { if (bgPlayer != null) bgPlayer.start(); if (narPlayer != null) narPlayer.start(); if (fxPlayer != null) fxPlayer.start(); } audioPausedByApp = false; } catch (Exception ignored) { }
         if (web != null) web.onResume();
         if (sensors != null && accel != null) sensors.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME);
     }
 
     @Override
     protected void onPause() {
+        try { if (bgPlayer != null && bgReady && bgPlayer.isPlaying()) { bgPlayer.pause(); audioPausedByApp = true; } if (narPlayer != null && narPlayer.isPlaying()) { narPlayer.pause(); audioPausedByApp = true; } if (fxPlayer != null && fxPlayer.isPlaying()) { fxPlayer.pause(); audioPausedByApp = true; } } catch (Exception ignored) { }
         if (sensors != null) sensors.unregisterListener(this);
         if (web != null) web.onPause();
         super.onPause();
@@ -406,7 +404,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     @Override
     protected void onDestroy() {
-        if (tts != null) { try { tts.stop(); tts.shutdown(); } catch (Exception ignored) { } tts = null; }
+        releaseBg(); releaseNar(); releaseFx();
         if (web != null) { root.removeAllViews(); web.destroy(); web = null; }
         super.onDestroy();
     }

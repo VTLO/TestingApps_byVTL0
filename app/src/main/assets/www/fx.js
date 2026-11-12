@@ -239,6 +239,7 @@ void main(){
   /* big strike used by the ambient storm */
   function strike(opts) {
     opts = opts || {};
+    if (root.classList.contains('noflash')) return;
     const x = opts.x != null ? opts.x : innerWidth * rnd(.15, .85);
     const yEnd = innerHeight * rnd(.45, .8);
     makeBolt(x, -6, x + rnd(-90, 90), yEnd, innerHeight * .26, 'rgba(120,190,255,A)', 2.0, 20, true);
@@ -249,6 +250,7 @@ void main(){
     buzz('0,35,45,70,40,30');
   }
   window.__lxStrike = strike;
+  window.__fx = { U, strike, buzz };
 
   /* ambient storm — begins once the launch overlay is gone */
   let stormTimer = null;
@@ -256,7 +258,7 @@ void main(){
     clearTimeout(stormTimer);
     if (reduce) return;
     stormTimer = setTimeout(() => {
-      if (!doc.hidden) { strike(); if (Math.random() < .4) setTimeout(strike, rnd(160, 380)); }
+      if (!doc.hidden && !window.__cinemaActive) { strike(); if (Math.random() < .4) setTimeout(strike, rnd(160, 380)); }
       scheduleStrike();
     }, rnd(11000, 24000));
   }
@@ -265,7 +267,7 @@ void main(){
   const stormFlash = $('#storm-flash');
   if (stormFlash) {
     new MutationObserver(() => {
-      if (stormFlash.classList.contains('strike')) { buzz('0,30,40,60,35,25'); U.flash = 1; U.boost = 2.4; }
+      if (stormFlash.classList.contains('strike') && !root.classList.contains('noflash')) { buzz('0,30,40,60,35,25'); U.flash = 1; U.boost = 2.4; }
     }).observe(stormFlash, { attributes: true, attributeFilter: ['class'] });
   }
   const credit = $('#launch-credit');
@@ -275,8 +277,9 @@ void main(){
   let launched = false;
   function afterLaunch() {
     if (launched) return; launched = true;
-    onEnter($('.section.active'), true);
     scheduleStrike();
+    if (window.__lxCinema && window.__cinema) { window.__cinema.start(); return; }
+    onEnter($('.section.active'), true);
   }
   if (overlay) {
     new MutationObserver(() => { if (overlay.classList.contains('done') || overlay.style.display === 'none') afterLaunch(); })
@@ -325,7 +328,7 @@ void main(){
     cancelAnimationFrame(el._cu);
     const step = now => {
       const k = clamp((now - t0) / dur, 0, 1), e = 1 - Math.pow(1 - k, 4);
-      el.textContent = m[1] + (target * e).toFixed(dec).replace('.', ',') + m[3];
+      el.textContent = m[1] + (target * e).toFixed(dec) + m[3];
       if (k < 1) el._cu = requestAnimationFrame(step); else el.textContent = orig;
     };
     el._cu = requestAnimationFrame(step);
@@ -350,12 +353,14 @@ void main(){
   window.showSection = function (id) {
     const prev = $('.section.active');
     _show(id);
+    if (window.__quietShow) return;
     const cur = $('.section.active');
     if (cur && cur !== prev) onEnter(cur, false);
   };
 
   /* back button support (called from Java) */
   window.__lxBack = function () {
+    if (window.__cinemaActive && window.__cinema) { window.__cinema.exit(); return true; }
     const sk = $('#launch-skip');
     if (overlay && overlay.style.display !== 'none' && !overlay.classList.contains('done') && sk) { sk.click(); return true; }
     const a = $('.section.active');
@@ -401,7 +406,7 @@ void main(){
       ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(0,229,255,.45)'; ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, plotH); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,224,51,.4)'; ctx.beginPath(); ctx.moveTo(bx, 0); ctx.lineTo(bx, plotH); ctx.stroke(); ctx.setLineDash([]);
       ctx.font = '8.5px "Space Mono", monospace';
-      ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(0,229,255,.8)'; ctx.fillText('GPS L1 1575,42', gx - 4, 11);
+      ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(0,229,255,.8)'; ctx.fillText('GPS L1 1575.42', gx - 4, 11);
       ctx.textAlign = 'left';  ctx.fillStyle = 'rgba(255,224,51,.8)'; ctx.fillText('BeiDou B1I', bx + 4, 11);
       // simulated live spectrum: bursts every ~150 s compressed into a visible rhythm
       const burst1 = .55 + .45 * Math.pow(Math.max(0, Math.sin(T * 1.1)), 2);
@@ -436,8 +441,8 @@ void main(){
         ctx.textAlign = 'center'; ctx.fillStyle = col; ctx.font = 'bold 9.5px "Space Mono", monospace'; ctx.fillText(txt, x, 28);
         if (W > 420) { ctx.font = '8.5px "Space Mono", monospace'; ctx.globalAlpha = .75; ctx.fillText(sub, x, 40); ctx.globalAlpha = 1; }
       };
-      tag(1577.5, 'BROUILLEUR 1 · 1577,5', '~5 MHz de bande', '#ff5d55');
-      tag(1558.5, 'BROUILLEUR 2 · 1558,5', '~4 MHz de bande', '#ffe033');
+      tag(1577.5, 'JAMMER 1 · 1577.5', '~5 MHz BW', '#ff5d55');
+      tag(1558.5, 'JAMMER 2 · 1558.5', '~4 MHz BW', '#ffe033');
       // sweeping scan cursor
       const sx = ((T * .12) % 1) * W;
       const sg = ctx.createLinearGradient(sx - 40, 0, sx, 0); sg.addColorStop(0, 'rgba(0,229,255,0)'); sg.addColorStop(1, 'rgba(0,229,255,.22)');
@@ -470,8 +475,9 @@ void main(){
       ctx.clearRect(0, 0, W, H);
 
       // layout (relative → works at any width)
-      let eR = clamp(Math.min(H * .105, W * .085), 16, 34);
-      const ex = clamp(W * .2, eR + 26, 150), ey = H * .56;
+      const KS = clamp(H / 290, 1, 1.7);
+      let eR = clamp(Math.min(H * .15, W * .12), 24, 58);
+      const ex = clamp(W * .22, eR + 30, 190), ey = H * .54;
       eR = Math.min(eR, ((W - 30 - ex) / (1 + ECC)) * (1 - ECC) * .7);
       const ap = Math.min(W - 30 - ex, H * .98);             // apogee distance from Earth centre
       const a = ap / (1 + ECC), p = a * (1 - ECC * ECC);
@@ -484,7 +490,7 @@ void main(){
       stars.forEach(s => { ctx.globalAlpha = .25 + .45 * (.5 + .5 * Math.sin(T * s.s * 2 + s.p)); ctx.fillStyle = '#cfe2ff'; ctx.fillRect(s.x * W, s.y * H, s.s * 1.4, s.s * 1.4); });
       ctx.globalAlpha = 1;
       // orbit path (glowing dashed)
-      ctx.save(); ctx.setLineDash([3, 6]); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,229,255,.32)'; ctx.shadowColor = 'rgba(0,229,255,.5)'; ctx.shadowBlur = 6;
+      ctx.save(); ctx.setLineDash([3, 6]); ctx.lineWidth = 1.8; ctx.strokeStyle = 'rgba(0,229,255,.62)'; ctx.shadowColor = 'rgba(0,229,255,.9)'; ctx.shadowBlur = 12;
       ctx.beginPath(); for (let i = 0; i <= 360; i++) { const q = pos(i / 360 * Math.PI * 2), x = q.x, y = q.y; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
       ctx.stroke(); ctx.restore();
 
@@ -501,29 +507,29 @@ void main(){
         if (vis) { ctx.beginPath(); ctx.ellipse(cx2, ey + Math.sin(k * 2.3) * eR * .4, eR * .26, eR * .16, k, 0, 6.2832); ctx.fill(); } }
       const term = ctx.createLinearGradient(ex - eR, 0, ex + eR, 0); term.addColorStop(0, 'rgba(0,0,0,0)'); term.addColorStop(1, 'rgba(0,0,0,.55)');
       ctx.fillStyle = term; ctx.fillRect(ex - eR, ey - eR, eR * 2, eR * 2); ctx.restore();
-      ctx.font = '9px "Space Mono", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(0,229,255,.75)';
-      ctx.fillText('TERRE', ex, ey + eR + 13);
+      ctx.font = 'bold ' + Math.round(11 * KS) + 'px "Space Mono", monospace'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(0,229,255,.95)';
+      ctx.fillText('EARTH', ex, ey + eR + 16 * KS);
 
       // apogee / perigee markers
       const ag = pos(Math.PI), pg = pos(0);
-      ctx.beginPath(); ctx.arc(ag.x, ag.y, 4.5, 0, 6.2832); ctx.fillStyle = 'rgba(255,59,59,.3)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,59,59,.85)'; ctx.lineWidth = 1.4; ctx.stroke();
-      ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,90,90,.95)'; ctx.font = 'bold 9px "Space Mono", monospace';
-      ctx.fillText('APOGÉE ~39 000 km', clamp(ag.x + 6, 90, W - 4), ag.y - 12);
+      ctx.beginPath(); ctx.arc(ag.x, ag.y, 6.5, 0, 6.2832); ctx.fillStyle = 'rgba(255,59,59,.3)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,59,59,.85)'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,90,90,.95)'; ctx.font = 'bold ' + Math.round(11 * KS) + 'px "Space Mono", monospace';
+      ctx.fillText('APOGEE ~39,000 km', clamp(ag.x + 6, 110, W - 4), ag.y - 14);
       ctx.beginPath(); ctx.arc(pg.x, pg.y, 2.8, 0, 6.2832); ctx.fillStyle = 'rgba(0,229,255,.6)'; ctx.fill();
-      ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(0,229,255,.7)'; ctx.font = '8px "Space Mono", monospace';
-      ctx.fillText('PÉRIGÉE ~500 km', 6, ey + eR + 28);
+      ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(0,229,255,.7)'; ctx.font = 'bold ' + Math.round(10 * KS) + 'px "Space Mono", monospace';
+      ctx.fillText('PERIGEE ~500 km', 6, ey + eR + 34 * KS);
 
       // satellites on a true Kepler clock (slow at apogee, fast at perigee)
-      const n = T * .26;
+      const n = T * .30;
       sats.forEach(s => {
         const M = n + s.ph * Math.PI * 2;
         const nu = kepler(((M % 6.2832) + 6.2832) % 6.2832, ECC);
         const q = pos(nu);
         // trail: sampled analytically along the orbit (frame-rate independent)
         let prev = q;
-        for (let i = 1; i <= 22; i++) {
+        for (let i = 1; i <= 34; i++) {
           const Mi = M - i * .02, qi = pos(kepler(((Mi % 6.2832) + 6.2832) % 6.2832, ECC));
-          ctx.strokeStyle = s.col; ctx.globalAlpha = (1 - i / 23) * .6; ctx.lineWidth = s.main ? 2.2 : 1.3;
+          ctx.strokeStyle = s.col; ctx.globalAlpha = (1 - i / 35) * .85; ctx.lineWidth = (s.main ? 3.4 : 2.2);
           ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(qi.x, qi.y); ctx.stroke(); prev = qi;
         }
         ctx.globalAlpha = 1;
@@ -539,16 +545,16 @@ void main(){
           // pulsing rings on the footprint (Europe)
           for (let r = 0; r < 3; r++) { const ph = ((T * .9 + r / 3) % 1);
             ctx.strokeStyle = `rgba(255,70,70,${(1 - ph) * .65 * k})`; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(hx, hy, 2 + ph * eR * .7, 0, 6.2832); ctx.stroke(); }
-          ctx.textAlign = 'left'; ctx.fillStyle = `rgba(255,110,110,${.9 * k})`; ctx.font = '8px "Space Mono", monospace';
+          ctx.textAlign = 'left'; ctx.fillStyle = `rgba(255,110,110,${.9 * k})`; ctx.font = 'bold ' + Math.round(10 * KS) + 'px "Space Mono", monospace';
           ctx.fillText('EUROPE', clamp(hx + 8, 4, W - 50), hy - 8);
         }
         // satellite body with halo
-        const rad = s.main ? 4.6 : 3;
+        const rad = s.main ? 7 : 4.6;
         const halo = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, rad * 4.5); halo.addColorStop(0, s.col); halo.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.globalAlpha = .45; ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(q.x, q.y, rad * 4.5, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1;
         ctx.fillStyle = s.col; ctx.beginPath(); ctx.arc(q.x, q.y, rad, 0, 6.2832); ctx.fill();
         if (s.main) { ctx.strokeStyle = 'rgba(255,59,59,.5)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(q.x, q.y, rad + 3 + Math.sin(T * 5) * 1.2, 0, 6.2832); ctx.stroke(); }
-        ctx.textAlign = q.x > W * .72 ? 'right' : 'left'; ctx.font = (s.main ? 'bold ' : '') + '8px "Space Mono", monospace'; ctx.fillStyle = s.col;
+        ctx.textAlign = q.x > W * .72 ? 'right' : 'left'; ctx.font = 'bold ' + Math.round((s.main ? 11 : 10) * KS) + 'px "Space Mono", monospace'; ctx.fillStyle = s.col;
         ctx.fillText(s.lab, q.x + (q.x > W * .72 ? -9 : 9), q.y - 7);
       });
     };
@@ -580,6 +586,6 @@ void main(){
   })();
 
   /* initial entrance if the overlay is already absent */
-  if (!overlay) onEnter($('.section.active'), true);
+  if (!overlay) afterLaunch();
   doc.documentElement.classList.add('fx-ready');
 })();
