@@ -33,6 +33,10 @@ Same presentation in any modern browser, installable and fully offline (service 
 A start screen asks for one tap (browsers block autoplay audio) → *Start 3-min presentation* or *Browse pages only*.
 Deployed by `.github/workflows/pages.yml` to GitHub Pages (enable Settings → Pages → Source: GitHub Actions). Local test: `cd web && python3 -m http.server`.
 
+## Standalone web app (single file, download & open)
+**`dist/VTLOdr3m3r.html`** (7.7 MB) — everything inlined (fonts, CSS, JS, icon, all audio). Download it from the repo (Raw / Download) and open it in any modern browser, even offline: no server, no install.
+Rebuild: `./scripts/build-web.sh && python3 scripts/build-standalone.py`.
+
 ## Build
 **Gradle**: `echo "sdk.dir=/path/sdk" > local.properties && ./gradlew assembleRelease`
 **Without Gradle**: `ANDROID_HOME=/path/sdk ./scripts/build-apk.sh` → `out/VTLOdr3m3r.apk` (MP3s stored uncompressed: required by `AssetFileDescriptor`).
